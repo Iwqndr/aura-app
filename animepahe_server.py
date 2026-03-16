@@ -121,25 +121,14 @@ def get_anime_stream(query, ep_num, choice_type):
 # --- WEB SERVER INTERFACE ---
 class AuraHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        # Bulletproof path parsing
-        parsed = urlparse(self.path)
-        clean_path = parsed.path.rstrip('/').lower()
-        params = parse_qs(parsed.query)
-
-        # Endpoint: HOME (Checking if service is alive)
-        if clean_path == "" or clean_path == "/":
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({"status": "online", "message": "Aura Pro API"}).encode())
-            return
-
-        # Endpoint: LIVE LOGS (The green/black debug screen)
-        elif clean_path == "/logs":
+        # 1. THE LOGS CHECK
+        # We check if "logs" is anywhere in the URL string
+        if "/logs" in self.path.lower():
             self.send_response(200)
             self.send_header('Content-Type', 'text/html')
+            self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            log_html = "<br>".join(reversed(logs)) 
+            log_html = "<br>".join(reversed(logs))
             html = f"""
             <html><body style="background:#111; color:#0f0; font-family:monospace; padding:20px;">
                 <h1 style="color:white;">Aura Pro Live Feed</h1>
@@ -151,8 +140,11 @@ class AuraHandler(BaseHTTPRequestHandler):
             self.wfile.write(html.encode())
             return
 
-        # Endpoint: SEARCH (Your Flutter app calls this)
-        elif clean_path == "/search":
+        # 2. THE SEARCH CHECK
+        elif "/search" in self.path.lower():
+            parsed = urlparse(self.path)
+            params = parse_qs(parsed.query)
+            
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
@@ -163,10 +155,21 @@ class AuraHandler(BaseHTTPRequestHandler):
             mode = params.get('mode', ['sub'])[0]
             
             stream_url = get_anime_stream(q, ep, mode)
-            
             response = {"url": stream_url} if stream_url else {"error": "No stream found"}
             self.wfile.write(json.dumps(response).encode())
             return
+
+        # 3. THE HOME/HEALTH CHECK
+        else:
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            # This helps us see what Render is actually sending to the script
+            self.wfile.write(json.dumps({
+                "status": "online", 
+                "message": "Aura API is alive",
+                "received_path": self.path
+            }).encode())
 
         # ERROR: PATH NOT FOUND
         else:
