@@ -291,15 +291,15 @@ class AuraHandler(BaseHTTPRequestHandler):
         pass
 
 
-def run_server(port=8888):
-    # Listen on 0.0.0.0 to allow connections from other devices on the same Wi-Fi
+def run_server():
+    # 1. Look for the port Render gave us, default to 10000
+    port = int(os.environ.get("PORT", 10000)) 
+    
+    # 2. MUST use "0.0.0.0" (not "localhost" or "127.0.0.1")
     server = HTTPServer(("0.0.0.0", port), AuraHandler)
-    print(f"\n Aura AnimePahe Server running on port {port}")
-    print("   Listening on all interfaces (0.0.0.0)")
-    print("   Caching enabled. No more redundant searches.")
-    print("   Endpoints: /search?q=..., /stream?anime_id=...&episode=...&type=sub|dub, /health")
+    
+    print(f"Aura Server running on port {port}")
     server.serve_forever()
-
 
 if __name__ == "__main__":
     run_server()
