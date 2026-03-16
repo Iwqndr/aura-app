@@ -1,2 +1,4 @@
-playwright
-greenlet
+playwright>=1.49.0
+greenlet>=3.1.1
+pyee>=11.0.0
+flask
