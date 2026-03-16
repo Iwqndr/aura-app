@@ -58,7 +58,7 @@ def get_anime_stream(query, ep_num, choice_type):
             anime_id = selected['session']
             log_print(f"Matched Anime: {selected['title']}")
 
-            # 3. Find Episode
+            # 3. Find Episode (Page-by-page scan)
             log_print(f"Finding Episode {ep_num}...")
             current_page = 1
             episode_data = None
@@ -69,7 +69,7 @@ def get_anime_stream(query, ep_num, choice_type):
                 page.wait_for_selector("body:has-text('total')", timeout=15000)
                 rel_data = json.loads(page.locator("body").inner_text())
                 
-                # Check for the episode (handle 0-padding like '01' vs '1')
+                # Check for the episode
                 for item in rel_data['data']:
                     if str(item['episode']).split('.')[0].lstrip('0') == ep_num.lstrip('0'):
                         episode_data = item
@@ -90,7 +90,7 @@ def get_anime_stream(query, ep_num, choice_type):
             
             page.wait_for_selector("#fansubMenu", timeout=20000)
             page.click("#fansubMenu")
-            time.sleep(1) # Wait for dropdown animation
+            time.sleep(1) 
             
             items = page.query_selector_all(".dropdown-item")
             available_links = []
@@ -108,7 +108,6 @@ def get_anime_stream(query, ep_num, choice_type):
                 log_print(f"❌ No {choice_type.upper()} version found.")
                 return None
 
-            # Return the highest resolution found
             available_links.sort(key=lambda x: x['res'], reverse=True)
             log_print(f"✅ Success! Found {available_links[0]['res']}p link.")
             return available_links[0]['url']
@@ -122,19 +121,29 @@ def get_anime_stream(query, ep_num, choice_type):
 # --- WEB SERVER INTERFACE ---
 class AuraHandler(BaseHTTPRequestHandler):
     def do_GET(self):
+        # Bulletproof path parsing
         parsed = urlparse(self.path)
+        clean_path = parsed.path.rstrip('/').lower()
         params = parse_qs(parsed.query)
 
-        # Endpoint 1: LIVE LOGS
-        if parsed.path == "/logs":
+        # Endpoint: HOME (Checking if service is alive)
+        if clean_path == "" or clean_path == "/":
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "online", "message": "Aura Pro API"}).encode())
+            return
+
+        # Endpoint: LIVE LOGS (The green/black debug screen)
+        elif clean_path == "/logs":
             self.send_response(200)
             self.send_header('Content-Type', 'text/html')
             self.end_headers()
-            log_html = "<br>".join(reversed(logs)) # Newest logs at top
+            log_html = "<br>".join(reversed(logs)) 
             html = f"""
             <html><body style="background:#111; color:#0f0; font-family:monospace; padding:20px;">
                 <h1 style="color:white;">Aura Pro Live Feed</h1>
-                <p>Status: Running</p><hr>
+                <p>Auto-refreshes every 3 seconds</p><hr>
                 <div id="logs">{log_html}</div>
                 <script>setTimeout(() => location.reload(), 3000);</script>
             </body></html>
@@ -142,8 +151,8 @@ class AuraHandler(BaseHTTPRequestHandler):
             self.wfile.write(html.encode())
             return
 
-        # Endpoint 2: SEARCH (The API for your Flutter App)
-        if parsed.path == "/search":
+        # Endpoint: SEARCH (Your Flutter app calls this)
+        elif clean_path == "/search":
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
@@ -157,6 +166,14 @@ class AuraHandler(BaseHTTPRequestHandler):
             
             response = {"url": stream_url} if stream_url else {"error": "No stream found"}
             self.wfile.write(json.dumps(response).encode())
+            return
+
+        # ERROR: PATH NOT FOUND
+        else:
+            self.send_response(404)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": "Path Not Found", "tried": clean_path}).encode())
 
 # --- LAUNCH ---
 if __name__ == "__main__":
